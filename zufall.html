@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1412">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zufall">
+<title>Zufall</title>
+<script>
+// App-Symbol und Offline-Start nur, wenn das Spiel über eine Webadresse läuft (nicht per Doppelklick).
+if (/^https?:$/.test(location.protocol)) {
+  [['manifest', 'manifest.json'], ['apple-touch-icon', 'apple-touch-icon.png'], ['icon', 'icon-192.png']].forEach(([rel, href]) => {
+    const l = document.createElement('link');
+    l.rel = rel;
+    l.href = href;
+    document.head.appendChild(l);
+  });
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+}
+</script>
+<style>
+:root {
+  --bg: #0f1412;
+  --karte: #18211c;
+  --karte2: #222d27;
+  --linie: #2f3e36;
+  --text: #f3f6f4;
+  --grau: #9db0a6;
+  --gruen: #22a45d;
+  --gruen-d: #1a7f48;
+  --rot: #e04848;
+  --gelb: #f2c230;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.4;
+}
+button, input, select { font: inherit; color: inherit; }
+
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--linie);
+  padding-top: env(safe-area-inset-top);
+}
+.kopf { display: flex; align-items: center; gap: 12px; max-width: 1100px; margin: 0 auto; padding: 8px 16px; }
+.logo { font-weight: 800; font-size: 22px; white-space: nowrap; }
+.logo span { color: var(--rot); }
+nav { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; }
+nav button {
+  background: none; border: 0; padding: 10px 14px; border-radius: 10px;
+  color: var(--grau); font-weight: 600; cursor: pointer; position: relative; white-space: nowrap;
+}
+nav button.aktiv { background: var(--karte2); color: var(--text); }
+nav .punkt { position: absolute; top: 6px; right: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--gelb); }
+@media (max-width: 560px) {
+  .logo { display: none; }
+  nav { margin-left: 0; width: 100%; justify-content: space-between; }
+  nav button { flex: 1; padding: 10px 4px; font-size: 16px; }
+}
+
+main { max-width: 1100px; margin: 0 auto; padding: 16px 16px 48px; }
+.karte { background: var(--karte); border: 1px solid var(--linie); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+h2 { font-size: 20px; margin: 0 0 12px; }
+.grau { color: var(--grau); }
+.hinweis { color: var(--grau); font-size: 15px; margin: 10px 0 0; }
+.warnung { color: var(--gelb); }
+.ok { color: #6fdc9c; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 10px 18px; border-radius: 12px;
+  border: 1px solid var(--linie); background: var(--karte2);
+  font-weight: 600; cursor: pointer; touch-action: manipulation;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.btn:active { transform: scale(.97); }
+.btn.primaer { background: var(--gruen); border-color: var(--gruen); color: #fff; }
+.btn.gefahr { background: transparent; border-color: #6b2c2c; color: #ff8a8a; }
+.btn.klein { min-height: 42px; padding: 6px 12px; font-size: 16px; }
+.btn.an { background: var(--gruen-d); border-color: #3ccf7f; color: #fff; }
+.btn.gross { width: 100%; min-height: 72px; font-size: 22px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+.zeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.zeile.mitte { justify-content: center; }
+.zeile.abstand { margin-top: 12px; }
+
+input[type=text], input[type=number], input[type=date], select {
+  background: var(--karte2); border: 1px solid var(--linie); border-radius: 10px;
+  padding: 10px 12px; min-height: 52px;
+}
+input[type=text] { flex: 1; min-width: 180px; }
+input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--gruen); }
+label { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Einrichtung */
+.zahl { display: inline-flex; align-items: center; gap: 6px; }
+.zahl input { width: 90px; text-align: center; font-size: 22px; font-weight: 700; }
+.zahl .btn { width: 52px; font-size: 26px; padding: 0; }
+.bereich { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+.bereich .bez { color: var(--grau); min-width: 32px; }
+
+/* Laufendes Spiel */
+.anzeige { text-align: center; }
+.anzeige .info { font-size: clamp(18px, 3.6vw, 26px); color: var(--grau); }
+.anzeige .ziel { font-size: clamp(110px, 32vw, 230px); font-weight: 800; line-height: 1; color: var(--gelb); font-variant-numeric: tabular-nums; margin: 6px 0; }
+.anzeige .stand { font-size: clamp(22px, 5vw, 36px); font-weight: 700; margin: 4px 0 10px; }
+.anzeige .quote-gross { font-size: clamp(56px, 14vw, 110px); font-weight: 800; color: var(--gelb); line-height: 1.1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chip { min-width: 44px; padding: 4px 10px; border-radius: 999px; background: var(--karte2); border: 1px solid var(--linie); font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip.ja { color: #6fdc9c; border-color: var(--gruen-d); }
+.chip.nein { color: #ff8a8a; border-color: #6b2c2c; }
+.chip.mehr { color: var(--grau); }
+.antwort { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 16px; }
+.antwort .btn { min-height: clamp(110px, 24vh, 200px); font-size: clamp(28px, 6.5vw, 52px); font-weight: 800; flex-direction: column; gap: 0; }
+.antwort .btn small { font-size: clamp(15px, 2.6vw, 20px); font-weight: 600; opacity: .8; }
+.antwort .nein { background: #2a1f1f; border-color: #5a3434; }
+.antwort .ja { background: #1d6b40; border-color: #3ccf7f; }
+
+/* Statistik */
+.kacheln { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 640px) { .kacheln { grid-template-columns: repeat(2, 1fr); } }
+.kachel { background: var(--karte); border: 1px solid var(--linie); border-radius: var(--radius); padding: 14px 8px; text-align: center; }
+.kachel b { display: block; font-size: clamp(24px, 5vw, 32px); }
+.kachel span { color: var(--grau); font-size: 15px; }
+.karte .kacheln { margin-bottom: 0; }
+.karte .kachel { background: var(--karte2); }
+.segment { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabelle { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid var(--linie); vertical-align: middle; }
+th { color: var(--grau); font-weight: 600; font-size: 15px; }
+td.z, th.z { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.feldname { font-weight: 700; white-space: nowrap; }
+td.detail { color: var(--grau); font-size: 15px; }
+td.detail .j { color: #6fdc9c; }
+td.detail .n { color: #ff8a8a; }
+tr.leer td { color: #5d6f65; }
+.balken { height: 14px; background: var(--karte2); border-radius: 7px; overflow: hidden; min-width: 70px; }
+.balken i { display: block; height: 100%; border-radius: 7px; }
+td.b { width: 32%; }
+@media (max-width: 560px) {
+  th, td { padding: 9px 4px; }
+  .balken { min-width: 32px; }
+}
+.kopfzeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.kopfzeile h2 { margin: 0; }
+
+/* Diagramme */
+.diagramm { width: 100%; margin: 4px 0 8px; }
+.diagramm svg { display: block; overflow: visible; }
+.diagramm text { font-family: inherit; }
+.diagramm .achse { fill: #8a968f; font-size: 12px; font-variant-numeric: tabular-nums; }
+.diagramm .achse.leer { fill: #4c5d54; }
+.diagramm .wert { fill: var(--text); font-size: 13px; font-weight: 700; }
+.diagramm .name { fill: var(--text); font-size: 15px; font-weight: 600; }
+.diagramm .gitter { stroke: #26322b; stroke-width: 1; }
+.diagramm .grundlinie { stroke: #3d4d44; stroke-width: 1; }
+.diagramm .linie { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.diagramm .punkt { stroke: var(--karte); stroke-width: 2; }
+.diagramm .treffer-flaeche { fill: transparent; }
+.diagramm .kreuz { stroke: #8a968f; stroke-width: 1; opacity: 0; }
+.diagramm .spalte:hover .kreuz, .diagramm .spalte:focus .kreuz { opacity: 1; }
+.diagramm .marke:hover path, .diagramm .marke:focus path { filter: brightness(1.25); }
+.diagramm g:focus { outline: none; }
+.diagramm g:focus-visible .treffer-flaeche { fill: rgba(255,255,255,.05); }
+.legende { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 8px; font-size: 15px; color: var(--text); }
+.legende i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.tip { position: fixed; z-index: 150; pointer-events: none; background: #0b100d; border: 1px solid var(--linie); border-radius: 10px;
+  padding: 8px 12px; font-size: 15px; box-shadow: 0 8px 24px rgba(0,0,0,.5); max-width: 260px; }
+.tip i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.tip span { color: var(--grau); }
+details.tabelle-auf { margin-top: 6px; }
+details.tabelle-auf summary { cursor: pointer; color: var(--grau); font-size: 15px; padding: 6px 0; }
+
+/* Spieler */
+.spieler-zeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--linie); }
+.spieler-zeile:last-child { border-bottom: 0; }
+.spieler-zeile b { font-size: 20px; }
+
+select.spielerwahl { flex: 1; min-width: 220px; max-width: 480px; font-size: 22px; font-weight: 700; min-height: 60px; }
+.banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  background: #2b2610; border: 1px solid #6b5a14; color: var(--gelb); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
+
+/* Dialog und Meldung */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 100; }
+.dialog { background: var(--karte); border: 1px solid var(--linie); border-radius: var(--radius); padding: 20px; max-width: 480px; width: 100%; }
+.dialog p { margin: 0 0 16px; white-space: pre-line; }
+.dialog input { width: 100%; margin-bottom: 16px; }
+.dialog .zeile { justify-content: flex-end; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: var(--karte2); border: 1px solid var(--linie); padding: 12px 18px; border-radius: 12px;
+  z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.5); max-width: calc(100% - 32px);
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="kopf">
+    <div class="logo">Zu<span>fall</span></div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+<main id="main"></main>
+<input type="file" id="dateiInput" accept=".txt,text/plain" hidden>
+
+<script>
+'use strict';
+
+// ---------- Grundlagen ----------
+
+const VERSION = 1;                       // Datenformat der txt-Datei
+const APP = 'Zufall';
+const DATEINAME = 'zufall-daten.txt';
+const ORDNER_VORSCHLAG = 'dateien zufall';
+const LS = {
+  daten: 'zufall.daten',
+  lauf: 'zufall.lauf',
+  einst: 'zufall.einstellung',
+  stat: 'zufall.statistik',
+  meta: 'zufall.meta'
+};
+const MIN_ZAHL = 2, MAX_ZAHL = 170;
+const BOGEYS = [159, 162, 163, 165, 166, 168, 169];   // mit 3 Darts nicht checkbar – nie gestellt
+const MAX_DARTS = 30;
+const WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const fsOrdner = typeof window.showDirectoryPicker === 'function';   // Chrome/Edge am PC/Mac
+const kannTeilen = (() => {                                            // Handy/Tablet: „In Dateien sichern“
+  try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.txt', { type: 'text/plain' })] })); }
+  catch (e) { return false; }
+})();
+
+const pad = n => String(n).padStart(2, '0');
+const fmtDatum = d => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+const fmtZeit = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const zahl = n => n.toLocaleString('de-DE');
+const pct = q => (q == null ? '–' : (q * 100).toFixed(1).replace('.', ',') + ' %');
+const neueId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const dartsText = n => `${n} Dart${n === 1 ? '' : 's'}`;
+const bereichText = (von, bis) => (von === bis ? String(von) : `${von}–${bis}`);
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ---------- Checkout-Rechnung ----------
+
+// Mindestzahl Darts, um n mit Doppel (oder Bull) als letztem Dart auszumachen.
+const MIN_DARTS = (() => {
+  const wuerfe = new Set([25, 50]);
+  for (let s = 1; s <= 20; s++) { wuerfe.add(s); wuerfe.add(2 * s); wuerfe.add(3 * s); }
+  const doppel = new Set([50]);
+  for (let s = 1; s <= 20; s++) doppel.add(2 * s);
+  const m = new Array(MAX_ZAHL + 1).fill(Infinity);
+  for (let n = MIN_ZAHL; n <= MAX_ZAHL; n++) {
+    if (doppel.has(n)) { m[n] = 1; continue; }
+    for (const w of wuerfe) if (n - w >= MIN_ZAHL && m[n - w] + 1 < m[n]) m[n] = m[n - w] + 1;
+  }
+  return m;
+})();
+
+const zahlErlaubt = (n, darts) => !BOGEYS.includes(n) && MIN_DARTS[n] <= darts;
+
+function zahlenPool(von, bis, darts) {
+  const p = [];
+  for (let n = von; n <= bis; n++) if (zahlErlaubt(n, darts)) p.push(n);
+  return p;
+}
+
+// ---------- Speicher im Browser ----------
+
+let speicherOk = true;
+function lsLesen(k) {
+  try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; }
+  catch (e) { speicherOk = false; return null; }
+}
+function lsSchreiben(k, v) {
+  try {
+    if (v == null) localStorage.removeItem(k);
+    else localStorage.setItem(k, JSON.stringify(v));
+  } catch (e) { speicherOk = false; }
+}
+
+const ganz = (v, min, max) => Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+
+// Prüft und bereinigt geladene Daten (aus Browser oder txt-Datei).
+function normalisieren(o) {
+  if (!o || typeof o !== 'object') return null;
+  const spieler = (Array.isArray(o.spieler) ? o.spieler : [])
+    .filter(s => s && s.id && typeof s.name === 'string')
+    .map(s => {
+      const sp = { id: String(s.id), name: s.name.trim() || '?', angelegt: s.angelegt || new Date().toISOString() };
+      if (s.versteckt) sp.versteckt = true;   // aus der Auswahlliste entfernt, Daten bleiben
+      if (Number.isInteger(s.farbe)) sp.farbe = s.farbe;
+      return sp;
+    });
+  const ids = new Set(spieler.map(s => s.id));
+  const spiele = [];
+  for (const g of (Array.isArray(o.spiele) ? o.spiele : [])) {
+    if (!g || !g.id || !ids.has(String(g.spieler)) || isNaN(Date.parse(g.datum))) continue;
+    let von = ganz(g.von, MIN_ZAHL, MAX_ZAHL), bis = ganz(g.bis, MIN_ZAHL, MAX_ZAHL);
+    if (von > bis) [von, bis] = [bis, von];
+    spiele.push({ id: String(g.id), spieler: String(g.spieler), von, bis, darts: ganz(g.darts, 1, MAX_DARTS), anzahl: ganz(g.anzahl, 0, 999), datum: g.datum });
+  }
+  const spielIds = new Map(spiele.map(g => [g.id, g]));
+  const versuche = [];
+  for (const v of (Array.isArray(o.versuche) ? o.versuche : [])) {
+    const g = v && spielIds.get(String(v.spiel));
+    const z = Math.round(Number(v && v.zahl));
+    if (!g || !v.id || isNaN(Date.parse(v.datum)) || !(z >= MIN_ZAHL && z <= MAX_ZAHL)) continue;
+    versuche.push({ id: String(v.id), spiel: g.id, spieler: g.spieler, zahl: z, ok: Number(v.ok) ? 1 : 0, datum: v.datum });
+  }
+  versuche.sort((a, b) => Date.parse(a.datum) - Date.parse(b.datum));
+  const belegt = new Set(versuche.map(v => v.spiel));
+  return { spieler, spiele: spiele.filter(g => belegt.has(g.id)).sort((a, b) => Date.parse(a.datum) - Date.parse(b.datum)), versuche };
+}
+
+let daten = normalisieren(lsLesen(LS.daten)) || { spieler: [], spiele: [], versuche: [] };
+let meta = Object.assign({ ungesichert: false, letzteDatei: null, dateiName: null, autoOrdner: true }, lsLesen(LS.meta) || {});
+let einst = Object.assign({ spieler: null, von: 2, bis: 170, darts: 3, anzahl: 0 }, lsLesen(LS.einst) || {});
+let statF = Object.assign({ spieler: 'alle', darts: 'alle', zeitraum: 'monat', von: '', bis: '', gruppe: 'tag', alle: false }, lsLesen(LS.stat) || {});
+let lauf = lsLesen(LS.lauf);             // laufendes Spiel
+if (lauf && (!Array.isArray(lauf.versuche) || !lauf.spiel)) lauf = null;
+let ansicht = 'spiel';
+let ordner = null;                       // nur Chrome/Edge: gewählter Speicherordner
+let ordnerRecht = 'prompt';              // granted | prompt | denied
+let neuerSpielerOffen = false;
+let schreibKette = Promise.resolve();
+
+function datenGeaendert() {
+  lsSchreiben(LS.daten, daten);
+  meta.ungesichert = true;
+  lsSchreiben(LS.meta, meta);
+  if (ordner && meta.autoOrdner && ordnerRecht === 'granted') {
+    schreibKette = schreibKette.then(() => inOrdnerSchreiben(true));
+  }
+}
+
+const aktiveSpieler = () => daten.spieler.filter(s => !s.versteckt).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+const laufSpeichern = () => lsSchreiben(LS.lauf, lauf);
+const einstSpeichern = () => lsSchreiben(LS.einst, einst);
+const statSpeichern = () => lsSchreiben(LS.stat, statF);
+
+const spielerName = id => (daten.spieler.find(s => s.id === id) || { name: '?' }).name;
+const spielVon = id => daten.spiele.find(g => g.id === id);
+
+function summe(liste) {
+  let ok = 0;
+  for (const v of liste) ok += v.ok;
+  return { n: liste.length, ok, quote: liste.length ? ok / liste.length : null };
+}
+
+// Kurzanzeige der Zahlen eines Spiels (grün = gecheckt, rot = nicht)
+function detailHtml(liste, max) {
+  const zeige = max && liste.length > max ? liste.slice(-max) : liste;
+  return (zeige.length < liste.length ? '… ' : '') + zeige.map(v => `<span class="${v.ok ? 'j' : 'n'}">${v.zahl}</span>`).join(' ');
+}
+
+function balken(q) {
+  const w = q == null ? 0 : Math.round(q * 100);
+  const farbe = q == null ? 'transparent' : q < 0.25 ? 'var(--rot)' : q < 0.5 ? 'var(--gelb)' : 'var(--gruen)';
+  return `<div class="balken"><i style="width:${w}%;background:${farbe}"></i></div>`;
+}
+
+// ---------- Dialog und Meldung ----------
+
+function dialog(text, knoepfe, eingabeWert) {
+  return new Promise(res => {
+    const o = document.createElement('div');
+    o.className = 'overlay';
+    const mitEingabe = eingabeWert !== undefined;
+    o.innerHTML = `<div class="dialog" role="dialog" aria-modal="true">
+      <p>${esc(text)}</p>
+      ${mitEingabe ? `<input type="text" maxlength="30" autocomplete="off" value="${esc(eingabeWert)}">` : ''}
+      <div class="zeile">${knoepfe.map((k, i) => `<button class="btn ${k.art || ''}" data-i="${i}">${esc(k.text)}</button>`).join('')}</div>
+    </div>`;
+    const inp = o.querySelector('input');
+    function fertig(i) {
+      o.remove();
+      document.removeEventListener('keydown', taste, true);
+      const k = knoepfe[i];
+      if (!k || k.wert == null) return res(null);
+      res(mitEingabe ? inp.value : k.wert);
+    }
+    function taste(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fertig(-1); }
+      else if (e.key === 'Enter' && mitEingabe) { e.preventDefault(); e.stopPropagation(); fertig(knoepfe.length - 1); }
+    }
+    o.addEventListener('click', e => {
+      const b = e.target.closest('button[data-i]');
+      if (b) fertig(Number(b.dataset.i));
+    });
+    document.addEventListener('keydown', taste, true);
+    document.body.appendChild(o);
+    if (inp) { inp.focus(); inp.select(); } else o.querySelector('.btn:last-child').focus();
+  });
+}
+
+let toastTimer = null;
+function meldung(text) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = text;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), 3500);
+}
+
+// ---------- Bildschirm wach halten (wo der Browser es erlaubt) ----------
+
+let wakeLock = null;
+async function wachHalten(an) {
+  try {
+    if (an && 'wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!an && wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (e) { /* nicht unterstützt */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && lauf && !lauf.fertig) wachHalten(true);
+});
+
+// ---------- Darstellung ----------
+
+function renderNav() {
+  const tabs = [['spiel', 'Spiel'], ['statistik', 'Statistik'], ['spieler', 'Spieler'], ['daten', 'Daten']];
+  document.getElementById('nav').innerHTML = tabs.map(([k, t]) =>
+    `<button class="${ansicht === k ? 'aktiv' : ''}" data-a="tab" data-v="${k}">${t}${
+      k === 'daten' && meta.ungesichert && daten.versuche.length ? '<span class="punkt" title="Nicht in Datei gesichert"></span>' : ''
+    }</button>`).join('');
+}
+
+function render() {
+  renderNav();
+  diagramme = [];
+  tipAus();
+  const main = document.getElementById('main');
+  if (ansicht === 'spiel') main.innerHTML = lauf ? renderLauf() : renderEinrichtung();
+  else if (ansicht === 'statistik') main.innerHTML = renderStatistik();
+  else if (ansicht === 'spieler') main.innerHTML = renderSpieler();
+  else main.innerHTML = renderDaten();
+  zeichneDiagramme();
+}
+
+function zahlFeld(name, wert, min, max, label) {
+  return `<span class="zahl">
+      <button class="btn" data-a="schritt" data-k="${name}" data-d="-1" aria-label="${label} weniger">−</button>
+      <input type="number" min="${min}" max="${max}" inputmode="numeric" value="${wert}" data-c="${name}" aria-label="${label}">
+      <button class="btn" data-a="schritt" data-k="${name}" data-d="1" aria-label="${label} mehr">+</button>
+    </span>`;
+}
+
+const BEREICHE = [[2, 40], [41, 80], [81, 120], [121, 170], [61, 100], [101, 170], [2, 100], [2, 170]];
+
+function renderEinrichtung() {
+  const sp = aktiveSpieler();
+  if (!sp.find(s => s.id === einst.spieler)) einst.spieler = sp.length ? sp[0].id : null;
+  const { von, bis, darts, anzahl } = einst;
+  const pool = zahlenPool(von, bis, darts);
+  const bogeyDrin = BOGEYS.filter(b => b >= von && b <= bis);
+  const zuWenig = [];
+  for (let n = von; n <= bis; n++) if (!BOGEYS.includes(n) && MIN_DARTS[n] > darts) zuWenig.push(n);
+
+  let h = renderOrdnerBanner() + `<section class="karte"><h2>1. Spieler</h2>`;
+  if (sp.length) {
+    h += `<div class="zeile">
+      <select class="spielerwahl" data-c="spielerWahl" aria-label="Spieler">
+        ${sp.map(s => `<option value="${s.id}" ${s.id === einst.spieler && !neuerSpielerOffen ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+        <option value="__neu" ${neuerSpielerOffen ? 'selected' : ''}>+ Neuer Spieler …</option>
+      </select>
+      <button class="btn klein" data-a="tab" data-v="spieler">Spieler verwalten</button>
+    </div>`;
+  } else {
+    h += `<p class="grau" style="margin-top:0">Noch kein Spieler angelegt.</p>`;
+  }
+  if (!sp.length || neuerSpielerOffen) {
+    h += `<div class="zeile ${sp.length ? 'abstand' : ''}"><input id="neuName" type="text" placeholder="Name des neuen Spielers" maxlength="30" autocomplete="off">
+      <button class="btn primaer" data-a="spielerNeu">Anlegen</button>
+      ${sp.length ? '<button class="btn" data-a="neuAbbrechen">Abbrechen</button>' : ''}</div>`;
+  }
+  h += `</section>`;
+
+  h += `<section class="karte"><h2>2. Bereich der Zufallszahlen <span class="grau">(${MIN_ZAHL}–${MAX_ZAHL})</span></h2>
+    <div class="bereich">
+      <label><span class="bez">von</span> ${zahlFeld('von', von, MIN_ZAHL, MAX_ZAHL, 'von')}</label>
+      <label><span class="bez">bis</span> ${zahlFeld('bis', bis, MIN_ZAHL, MAX_ZAHL, 'bis')}</label>
+    </div>
+    <div class="segment" style="margin-top:12px">${BEREICHE.map(([a, b]) =>
+      `<button class="btn klein ${a === von && b === bis ? 'an' : ''}" data-a="bereich" data-von="${a}" data-bis="${b}">${a}–${b}</button>`).join('')}</div>
+    <p class="hinweis">${pool.length ? `${zahl(pool.length)} mögliche Zahlen.` : '<span class="warnung">Keine Zahl in diesem Bereich ist checkbar.</span>'}
+      ${bogeyDrin.length ? ` Ohne die Bogey-Zahlen ${bogeyDrin.join(', ')}.` : ''}
+      ${zuWenig.length ? ` <span class="warnung">Mit ${dartsText(darts)} nicht checkbar und ausgelassen: ${zuWenig.length > 12 ? zuWenig.length + ' Zahlen' : zuWenig.join(', ')}.</span>` : ''}</p>
+  </section>`;
+
+  h += `<section class="karte"><h2>3. Darts bis Null</h2>
+    <div class="zeile">
+      ${[1, 2, 3, 6, 9].map(n => `<button class="btn ${darts === n ? 'an' : ''}" data-a="setze" data-k="darts" data-w="${n}">${n}</button>`).join('')}
+      ${zahlFeld('darts', darts, 1, MAX_DARTS, 'Darts')}
+    </div>
+    <p class="hinweis">Mit ${dartsText(darts)} auf Null (letzter Dart ein Doppel oder Bull). Danach nur angeben: gecheckt oder nicht.</p>
+  </section>`;
+
+  h += `<section class="karte"><h2>4. Anzahl Zahlen je Spiel</h2>
+    <div class="zeile">
+      <button class="btn ${!anzahl ? 'an' : ''}" data-a="setze" data-k="anzahl" data-w="0">Offen</button>
+      ${[10, 20, 30, 50].map(n => `<button class="btn ${anzahl === n ? 'an' : ''}" data-a="setze" data-k="anzahl" data-w="${n}">${n}</button>`).join('')}
+      ${anzahl ? zahlFeld('anzahl', anzahl, 1, 999, 'Anzahl') : ''}
+    </div>
+    <p class="hinweis">${anzahl ? `Das Spiel endet nach ${anzahl} Zahlen.` : 'Das Spiel läuft, bis Sie es beenden.'}
+      Bereich und Darts bleiben für das ganze Spiel gleich – zum Ändern ein neues Spiel starten.</p>
+  </section>`;
+
+  const bereit = einst.spieler && pool.length;
+  h += `<button class="btn primaer gross" data-a="start" ${bereit ? '' : 'disabled'}>${
+    bereit ? `Start: ${bereichText(von, bis)} mit ${dartsText(darts)}${anzahl ? ` · ${anzahl} Zahlen` : ''}`
+           : (einst.spieler ? 'Bitte einen anderen Bereich wählen' : 'Bitte einen Spieler anlegen')}</button>`;
+  return h;
+}
+
+const laufVersuche = L => L.versuche.map(id => daten.versuche.find(v => v.id === id)).filter(Boolean);
+
+function renderLauf() {
+  const L = lauf;
+  if (L.fertig) return renderZusammenfassung();
+  const liste = laufVersuche(L);
+  const s = summe(liste);
+  const nr = liste.length + 1;
+  const MAX_CHIPS = 24;
+  const chips = (liste.length > MAX_CHIPS ? `<span class="chip mehr">+${liste.length - MAX_CHIPS}</span>` : '') +
+    liste.slice(-MAX_CHIPS).map(v => `<span class="chip ${v.ok ? 'ja' : 'nein'}">${v.zahl}</span>`).join('');
+  return `<section class="karte anzeige">
+      <div class="info">${esc(spielerName(L.spieler))} · ${bereichText(L.von, L.bis)} · ${dartsText(L.darts)}</div>
+      <div class="info">Zahl <b style="color:var(--text)">${nr}</b>${L.anzahl ? ` von ${L.anzahl}` : ''}</div>
+      <div class="ziel">${L.aktuell}</div>
+      <div class="stand">${s.ok} von ${s.n} gecheckt${s.n ? ` <span class="grau">· ${pct(s.quote)}</span>` : ''}</div>
+      <div class="chips">${chips}</div>
+    </section>
+    <div class="antwort">
+      <button class="btn nein" data-a="ergebnis" data-n="0">Nicht gecheckt<small>✗</small></button>
+      <button class="btn ja" data-a="ergebnis" data-n="1">Gecheckt<small>✓</small></button>
+    </div>
+    <div class="zeile mitte">
+      <button class="btn" data-a="rueck" ${liste.length ? '' : 'disabled'}>↶ Rückgängig</button>
+      <button class="btn gefahr" data-a="beenden">Spiel beenden</button>
+    </div>
+    <p class="hinweis" style="text-align:center">Mit Tastatur: 1 = gecheckt, 0 = nicht gecheckt, Rücktaste = rückgängig</p>`;
+}
+
+function renderZusammenfassung() {
+  const L = lauf;
+  const liste = laufVersuche(L);
+  const s = summe(liste);
+  let h = `<section class="karte anzeige">
+      <div class="info">${esc(spielerName(L.spieler))} · ${bereichText(L.von, L.bis)} · ${dartsText(L.darts)} · Spiel ${L.abgebrochen ? 'beendet' : 'fertig'}</div>
+      <div class="stand">${s.ok} von ${s.n} gecheckt</div>
+      <div class="quote-gross">${pct(s.quote)}</div>
+    </section>`;
+  if (liste.length) {
+    h += `<section class="karte"><h2>Zahlen dieses Spiels</h2>
+      <div class="chips" style="justify-content:flex-start">${liste.map(v => `<span class="chip ${v.ok ? 'ja' : 'nein'}">${v.zahl}</span>`).join('')}</div>
+      <p class="hinweis">Grün = gecheckt, rot = nicht gecheckt.</p></section>`;
+  }
+  h += `<button class="btn primaer gross" data-a="nochmal">Gleiches Spiel nochmal</button>
+    <div class="zeile mitte abstand">
+      <button class="btn" data-a="neu">Neues Spiel (Bereich / Darts ändern)</button>
+      <button class="btn" data-a="tab" data-v="statistik">Zur Statistik</button>
+      ${!L.abgebrochen && liste.length ? '<button class="btn" data-a="rueck">↶ Letzte Eingabe rückgängig</button>' : ''}
+    </div>`;
+  return h;
+}
+
+// ---------- Diagramme ----------
+
+// Feste Farbe je Spieler (Platz 0–7, wird beim Anlegen vergeben und bleibt). Farbfolge auf
+// Farbsehschwäche geprüft (dunkler Hintergrund); mehr als 8 Spieler bekommen keine eigene Linie.
+const FARBEN = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+const MONATE_KURZ = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MAX_PERIODEN = 40;
+
+function farbenZuweisen() {
+  const belegt = new Set();
+  for (const s of daten.spieler) {
+    if (Number.isInteger(s.farbe) && s.farbe >= 0 && s.farbe < FARBEN.length && !belegt.has(s.farbe)) belegt.add(s.farbe);
+    else delete s.farbe;
+  }
+  for (const s of daten.spieler) {
+    if (s.farbe !== undefined) continue;
+    for (let i = 0; i < FARBEN.length; i++) if (!belegt.has(i)) { s.farbe = i; belegt.add(i); break; }
+  }
+}
+const spielerFarbe = id => { const s = daten.spieler.find(x => x.id === id); return s && s.farbe !== undefined ? FARBEN[s.farbe] : null; };
+
+let diagramme = [];        // { id, zeichne(breite) } – werden nach dem Einfügen ins HTML gezeichnet
+function diagrammPlatz(zeichne) {
+  const id = 'dg' + diagramme.length;
+  diagramme.push({ id, zeichne });
+  return `<div class="diagramm" id="${id}"></div>`;
+}
+function zeichneDiagramme() {
+  for (const d of diagramme) {
+    const el = document.getElementById(d.id);
+    if (el) el.innerHTML = d.zeichne(Math.max(260, el.clientWidth));
+  }
+}
+let groesseTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(groesseTimer);
+  groesseTimer = setTimeout(() => { if (ansicht === 'statistik') zeichneDiagramme(); }, 150);
+});
+
+const pctKurz = q => Math.round(q * 100) + ' %';
+const okText = p => `${zahl(p.ok)} von ${zahl(p.n)} gecheckt`;
+function skala(werte) {
+  const m = Math.max(0, ...werte);
+  const max = Math.min(1, Math.max(0.1, Math.ceil(m * 10 - 1e-9) / 10));
+  const schritt = max <= 0.5 ? 0.1 : 0.2;
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += schritt) ticks.push(Math.round(v * 100) / 100);
+  if (ticks[ticks.length - 1] < max - 1e-9) ticks.push(max);
+  return { max: ticks[ticks.length - 1], ticks };
+}
+// Säule/Balken mit 4px gerundetem Ende, gerade an der Grundlinie
+function saeulePfad(x, y, b, h) {
+  const r = Math.min(4, b / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + b - r}Q${x + b},${y} ${x + b},${y + r}V${y + h}Z`;
+}
+function balkenPfad(x, y, b, h) {
+  const r = Math.min(4, h / 2, b);
+  return `M${x},${y}H${x + b - r}Q${x + b},${y} ${x + b},${y + r}V${y + h - r}Q${x + b},${y + h} ${x + b - r},${y + h}H${x}Z`;
+}
+// Tooltip-Zeilen: "farbe~wert~text" (farbe optional)
+const tipZeile = (farbe, wert, text) => [farbe || '', wert, text].join('~');
+const tipAttr = zeilen => `data-tip="${esc(zeilen.join('|'))}"`;
+
+function yAchse(s, links, rechts, y) {
+  return s.ticks.map(v => `<line class="gitter" x1="${links}" x2="${rechts}" y1="${y(v)}" y2="${y(v)}"/>
+    <text class="achse" x="${links - 6}" y="${y(v) + 4}" text-anchor="end">${pctKurz(v)}</text>`).join('');
+}
+
+// Quote je Zahlenbereich: eine Reihe, Säulen
+function saeulenSvg(w, werte, farbe) {
+  const H = 230, oben = 22, unten = 26, links = 42, rechts = 6;
+  const ph = H - oben - unten, pw = w - links - rechts;
+  const s = skala(werte.filter(v => v.q != null).map(v => v.q));
+  const y = q => oben + ph - (q / s.max) * ph;
+  const slot = pw / werte.length;
+  const bb = Math.max(4, Math.min(28, slot - 4));
+  const mitDaten = werte.filter(v => v.q != null);
+  const best = mitDaten.length >= 3 ? mitDaten.reduce((a, b) => (b.q > a.q ? b : a)) : null;
+  const schwach = mitDaten.length >= 3 ? mitDaten.reduce((a, b) => (b.q < a.q ? b : a)) : null;
+  const schrift = 12, zeichenBreite = 7.2;
+  // x-Beschriftung: Säulen mit Daten zuerst, dann die übrigen – nur wo Platz ist
+  const belegt = [];
+  const passt = (x0, x1) => !belegt.some(([a, b]) => x0 < b + 3 && x1 > a - 3);
+  const zeigeNr = new Set();
+  [...werte.keys()].sort((a, b) => (werte[a].q == null) - (werte[b].q == null)).forEach(i => {
+    const mitte = links + i * slot + slot / 2, halb = (werte[i].kurz.length * zeichenBreite) / 2;
+    if (passt(mitte - halb, mitte + halb)) { belegt.push([mitte - halb, mitte + halb]); zeigeNr.add(i); }
+  });
+  // Wertlabel über bester/schwächster Säule nur, wenn keine Nachbarsäule hineinragt
+  const labelFrei = i => {
+    const halb = (pctKurz(werte[i].q).length * 7.5) / 2, mitte = links + i * slot + slot / 2, oberkante = y(werte[i].q) - 20;
+    return werte.every((v, j) => j === i || v.q == null || Math.abs(links + j * slot + slot / 2 - mitte) > halb + bb / 2 || y(v.q) > oberkante + 16);
+  };
+  let svg = yAchse(s, links, w - rechts, y);
+  svg += `<line class="grundlinie" x1="${links}" x2="${w - rechts}" y1="${oben + ph}" y2="${oben + ph}"/>`;
+  werte.forEach((v, i) => {
+    const x = links + i * slot;
+    const tip = v.q == null ? [tipZeile('', '–', v.lang), 'noch nicht gespielt'] : [tipZeile('', pct(v.q), v.lang), okText(v)];
+    svg += `<g class="marke" tabindex="0" ${tipAttr(tip)}><rect class="treffer-flaeche" x="${x}" y="${oben}" width="${slot}" height="${ph + unten}"/>`;
+    if (v.q != null && v.q > 0) svg += `<path d="${saeulePfad(x + (slot - bb) / 2, y(v.q), bb, oben + ph - y(v.q))}" fill="${farbe}"/>`;
+    if (zeigeNr.has(i)) svg += `<text class="achse ${v.q == null ? 'leer' : ''}" x="${x + slot / 2}" y="${H - 8}" text-anchor="middle" font-size="${schrift}">${v.kurz}</text>`;
+    if ((v === best || v === schwach) && labelFrei(i)) {
+      svg += `<text class="wert" x="${x + slot / 2}" y="${y(v.q) - 6}" text-anchor="middle">${pctKurz(v.q)}</text>`;
+    }
+    svg += `</g>`;
+  });
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Quote je Zahlenbereich">${svg}</svg>`;
+}
+
+// Verlauf: eine Linie je Spieler (oder eine für die Auswahl)
+function linienSvg(w, perioden, serien) {
+  const n = perioden.length;
+  const H = 240, oben = 16, unten = 28, links = 42;
+  const ph = H - oben - unten;
+  const alle = serien.flatMap(se => se.werte.filter(Boolean).map(p => p.q));
+  const s = skala(alle);
+  const y = q => oben + ph - (q / s.max) * ph;
+  // Namen am Linienende nur bei höchstens 4 Reihen und ohne Überlappung
+  const enden = serien.map(se => {
+    let i = se.werte.length - 1;
+    while (i >= 0 && !se.werte[i]) i--;
+    return i < 0 ? null : { se, i, yy: y(se.werte[i].q) };
+  }).filter(Boolean).sort((a, b) => a.yy - b.yy);
+  const endLabels = serien.length <= 4 && enden.every((e, k) => !k || e.yy - enden[k - 1].yy >= 15);
+  const rechts = endLabels ? (serien.length > 1 ? 84 : 44) : 14;
+  const pw = w - links - rechts;
+  const x = i => links + (n === 1 ? pw / 2 : (i * pw) / (n - 1));
+  let svg = yAchse(s, links, w - rechts, y);
+  svg += `<line class="grundlinie" x1="${links}" x2="${w - rechts}" y1="${oben + ph}" y2="${oben + ph}"/>`;
+
+  // x-Beschriftung ausdünnen (mindestens ~64px Abstand), erste und letzte immer
+  const jede = Math.max(1, Math.ceil(64 / (n > 1 ? pw / (n - 1) : pw)));
+  perioden.forEach((p, i) => {
+    if (i % jede && i !== n - 1) return;
+    if (i !== n - 1 && n - 1 - i < jede && n > 1) return;
+    svg += `<text class="achse" x="${x(i)}" y="${H - 8}" text-anchor="${n === 1 ? 'middle' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${p.kurz}</text>`;
+  });
+
+  // Linien (bei Lücken unterbrochen), bei einer Reihe mit leichter Fläche
+  for (const se of serien) {
+    let teil = [];
+    const teile = [];
+    se.werte.forEach((p, i) => { if (p) teil.push([x(i), y(p.q)]); else if (teil.length) { teile.push(teil); teil = []; } });
+    if (teil.length) teile.push(teil);
+    for (const t of teile) {
+      const d = t.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ',' + pt[1].toFixed(1)).join('');
+      if (serien.length === 1 && t.length > 1) {
+        svg += `<path d="${d}L${t[t.length - 1][0].toFixed(1)},${oben + ph}L${t[0][0].toFixed(1)},${oben + ph}Z" fill="${se.farbe}" opacity=".12"/>`;
+      }
+      if (t.length > 1) svg += `<path class="linie" d="${d}" stroke="${se.farbe}"/>`;
+    }
+  }
+  // Punkte mit Ring in Hintergrundfarbe
+  if (n <= MAX_PERIODEN) {
+    for (const se of serien) se.werte.forEach((p, i) => {
+      if (p) svg += `<circle class="punkt" cx="${x(i)}" cy="${y(p.q)}" r="4" fill="${se.farbe}"/>`;
+    });
+  }
+  // Namen am Linienende (nur wenn sie sich nicht überlappen)
+  if (endLabels) {
+    for (const e of enden) {
+      const xe = x(e.i) + 9;
+      svg += `<text class="wert" x="${xe}" y="${e.yy + 4}">${serien.length > 1 ? esc(kuerzen(e.se.name, 8)) + ' ' : ''}${pctKurz(e.se.werte[e.i].q)}</text>`;
+    }
+  }
+  // Fadenkreuz: ganze Spalte ist Trefferfläche, Tooltip zeigt alle Reihen
+  perioden.forEach((p, i) => {
+    const x0 = n === 1 ? links : i === 0 ? links : (x(i - 1) + x(i)) / 2;
+    const x1 = n === 1 ? w - rechts : i === n - 1 ? w - rechts : (x(i) + x(i + 1)) / 2;
+    const zeilen = [tipZeile('', p.lang, '')].concat(serien.map(se => {
+      const v = se.werte[i];
+      return tipZeile(se.farbe, v ? pct(v.q) : '–', serien.length > 1 ? `${se.name}${v ? ` · ${zahl(v.ok)}/${zahl(v.n)}` : ''}` : (v ? okText(v) : ''));
+    }));
+    svg += `<g class="spalte" tabindex="0" ${tipAttr(zeilen)}><rect class="treffer-flaeche" x="${x0}" y="${oben}" width="${Math.max(1, x1 - x0)}" height="${ph}"/>
+      <line class="kreuz" x1="${x(i)}" x2="${x(i)}" y1="${oben}" y2="${oben + ph}"/></g>`;
+  });
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Verlauf der Quote">${svg}</svg>`;
+}
+
+// Spielervergleich: waagerechte Balken, Wert am Balkenende
+function balkenSvg(w, zeilen) {
+  const zeile = 38, dicke = 20, links = Math.min(130, Math.round(w * 0.32)), rechts = 96;
+  const H = zeilen.length * zeile + 8;
+  const pw = w - links - rechts;
+  const s = skala(zeilen.map(z => z.q));
+  let svg = `<line class="grundlinie" x1="${links}" x2="${links}" y1="4" y2="${H - 4}"/>`;
+  zeilen.forEach((z, i) => {
+    const y0 = 4 + i * zeile, yb = y0 + (zeile - dicke) / 2;
+    const b = Math.max(1, (z.q / s.max) * pw);
+    svg += `<g class="marke" tabindex="0" ${tipAttr([tipZeile(z.farbe, pct(z.q), z.name), okText(z)])}>
+      <rect class="treffer-flaeche" x="0" y="${y0}" width="${w}" height="${zeile}"/>
+      <text class="name" x="${links - 10}" y="${y0 + zeile / 2 + 5}" text-anchor="end">${esc(kuerzen(z.name, Math.max(6, Math.floor(links / 10))))}</text>
+      <path d="${balkenPfad(links, yb, b, dicke)}" fill="${z.farbe || '#6f7d76'}"/>
+      <text class="wert" x="${links + b + 8}" y="${y0 + zeile / 2 + 5}">${pct(z.q)} <tspan class="achse">${zahl(z.ok)}/${zahl(z.n)}</tspan></text></g>`;
+  });
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="Spielervergleich">${svg}</svg>`;
+}
+
+const kuerzen = (t, n) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+
+function legende(serien) {
+  return `<div class="legende">${serien.map(se =>
+    `<span><i style="background:${se.farbe}"></i>${esc(se.name)}</span>`).join('')}</div>`;
+}
+
+// Tooltip (Inhalt nur per textContent)
+const tip = document.createElement('div');
+tip.className = 'tip';
+tip.setAttribute('role', 'tooltip');
+tip.hidden = true;
+document.body.appendChild(tip);
+function tipZeigen(el, px, py) {
+  tip.replaceChildren();
+  for (const z of el.dataset.tip.split('|')) {
+    const teile = z.split('~');
+    const [farbe, wert, text] = teile.length === 1 ? ['', '', z] : teile;   // Zeile ohne ~ = reiner Text
+    const r = document.createElement('div');
+    if (farbe) { const k = document.createElement('i'); k.style.background = farbe; r.appendChild(k); }
+    if (wert) { const b = document.createElement('b'); b.textContent = wert; r.appendChild(b); }
+    if (text) { const t = document.createElement('span'); t.textContent = ' ' + text; r.appendChild(t); }
+    tip.appendChild(r);
+  }
+  tip.hidden = false;
+  const tb = tip.getBoundingClientRect();
+  let x = px + 14, y = py + 14;
+  if (x + tb.width > innerWidth - 8) x = px - tb.width - 14;
+  if (y + tb.height > innerHeight - 8) y = py - tb.height - 14;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
+}
+const tipAus = () => { tip.hidden = true; };
+function tipBeiZeiger(e) {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (el) tipZeigen(el, e.clientX, e.clientY); else tipAus();
+}
+document.addEventListener('pointermove', tipBeiZeiger);
+document.addEventListener('pointerdown', tipBeiZeiger);
+document.addEventListener('focusin', e => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el) return tipAus();
+  const r = el.getBoundingClientRect();
+  tipZeigen(el, r.left + r.width / 2, r.top + r.height / 3);
+});
+document.addEventListener('focusout', tipAus);
+window.addEventListener('scroll', tipAus, { passive: true });
+
+// ---------- Statistik ----------
+
+function zeitraumGrenzen() {
+  const j = new Date();
+  const heute = new Date(j.getFullYear(), j.getMonth(), j.getDate());
+  const ausText = (s, ende) => {
+    if (!s) return null;
+    const [y, m, d] = s.split('-').map(Number);
+    return ende ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d);
+  };
+  switch (statF.zeitraum) {
+    case 'heute': return { von: heute, bis: null };
+    case 'woche': return { von: new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() - (heute.getDay() + 6) % 7), bis: null };
+    case 'monat': return { von: new Date(j.getFullYear(), j.getMonth(), 1), bis: null };
+    case 'jahr': return { von: new Date(j.getFullYear(), 0, 1), bis: null };
+    case 'eigen': return { von: ausText(statF.von, false), bis: ausText(statF.bis, true) };
+    default: return { von: null, bis: null };
+  }
+}
+
+function isoWoche(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const tag = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - tag);
+  const jahr = t.getUTCFullYear();
+  const kw = Math.ceil(((t - Date.UTC(jahr, 0, 1)) / 86400000 + 1) / 7);
+  return { jahr, kw };
+}
+
+function gruppe(d) {
+  switch (statF.gruppe) {
+    case 'woche': { const w = isoWoche(d); return [`${w.jahr}-${pad(w.kw)}`, `KW ${w.kw} / ${w.jahr}`, `KW ${w.kw}`]; }
+    case 'monat': return [`${d.getFullYear()}-${pad(d.getMonth() + 1)}`, `${MONATE[d.getMonth()]} ${d.getFullYear()}`, `${MONATE_KURZ[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`];
+    case 'jahr': return [String(d.getFullYear()), String(d.getFullYear()), String(d.getFullYear())];
+    default: return [`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, `${WOCHENTAGE[d.getDay()]} ${fmtDatum(d)}`, `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`];
+  }
+}
+
+function segment(aktion, aktuell, werte) {
+  return `<div class="segment">${werte.map(([w, t]) =>
+    `<button class="btn klein ${String(aktuell) === String(w) ? 'an' : ''}" data-a="${aktion}" data-w="${w}">${t}</button>`).join('')}</div>`;
+}
+
+// Zehnerbereiche für „Quote je Zahlenbereich“: 2–10, 11–20, … 161–170
+const ZEHNER = Array.from({ length: 17 }, (_, i) => [i ? i * 10 + 1 : MIN_ZAHL, (i + 1) * 10]);
+
+function renderStatistik() {
+  if (statF.spieler !== 'alle' && !daten.spieler.find(s => s.id === statF.spieler)) statF.spieler = 'alle';
+  const dartsWerte = [...new Set(daten.spiele.map(g => g.darts))].sort((a, b) => a - b);
+  if (statF.darts !== 'alle' && !dartsWerte.includes(Number(statF.darts))) statF.darts = 'alle';
+  const { von, bis } = zeitraumGrenzen();
+  const spielMap = new Map(daten.spiele.map(g => [g.id, g]));
+  const liste = daten.versuche.filter(v => {
+    if (statF.spieler !== 'alle' && v.spieler !== statF.spieler) return false;
+    if (statF.darts !== 'alle' && spielMap.get(v.spiel).darts !== Number(statF.darts)) return false;
+    const d = new Date(v.datum);
+    return (!von || d >= von) && (!bis || d <= bis);
+  });
+
+  let h = `<section class="karte">
+    <div class="zeile" style="margin-bottom:12px">
+      <label>Spieler <select data-c="statSpieler">
+        <option value="alle">Alle Spieler</option>
+        ${daten.spieler.slice().sort((a, b) => a.name.localeCompare(b.name, 'de')).map(s =>
+          `<option value="${s.id}" ${statF.spieler === s.id ? 'selected' : ''}>${esc(s.name)}${s.versteckt ? ' (entfernt)' : ''}</option>`).join('')}
+      </select></label>
+      ${dartsWerte.length > 1 ? `<label>Darts <select data-c="statDarts">
+        <option value="alle">Alle</option>
+        ${dartsWerte.map(n => `<option value="${n}" ${String(statF.darts) === String(n) ? 'selected' : ''}>${dartsText(n)}</option>`).join('')}
+      </select></label>` : ''}
+    </div>
+    ${segment('statZeit', statF.zeitraum, [['heute', 'Heute'], ['woche', 'Diese Woche'], ['monat', 'Dieser Monat'], ['jahr', 'Dieses Jahr'], ['gesamt', 'Gesamt'], ['eigen', 'Zeitraum …']])}
+    ${statF.zeitraum === 'eigen' ? `<div class="zeile abstand">
+      <label>von <input type="date" data-c="statVon" value="${statF.von}"></label>
+      <label>bis <input type="date" data-c="statBis" value="${statF.bis}"></label></div>` : ''}
+  </section>`;
+
+  if (!liste.length) {
+    return h + `<section class="karte"><p class="grau" style="margin:0">Keine Spiele im gewählten Zeitraum.</p></section>`;
+  }
+
+  // Gesamt
+  const s = summe(liste);
+  const spielIds = [...new Set(liste.map(v => v.spiel))];
+  h += `<div class="kacheln">
+    <div class="kachel"><b>${zahl(spielIds.length)}</b><span>Spiele</span></div>
+    <div class="kachel"><b>${zahl(s.n)}</b><span>Zahlen</span></div>
+    <div class="kachel"><b>${zahl(s.ok)}</b><span>gecheckt</span></div>
+    <div class="kachel"><b>${pct(s.quote)}</b><span>Quote</span></div>
+  </div>`;
+
+  // Je Anzahl Darts (nur wenn verschiedene gespielt wurden)
+  if (statF.darts === 'alle') {
+    const jeDarts = dartsWerte.map(d => ({ d, ...summe(liste.filter(v => spielMap.get(v.spiel).darts === d)) })).filter(x => x.n);
+    if (jeDarts.length > 1) {
+      h += `<section class="karte"><h2>Je Anzahl Darts</h2><div class="kacheln">${jeDarts.map(x =>
+        `<div class="kachel"><b>${pct(x.quote)}</b><span>${dartsText(x.d)} · ${zahl(x.ok)} von ${zahl(x.n)}</span></div>`).join('')}</div>
+        <p class="hinweis">Für einen fairen Vergleich oben eine Anzahl Darts auswählen.</p></section>`;
+    }
+  }
+
+  // Je Zahlenbereich (nur von der kleinsten bis zur größten gespielten Zehnergruppe)
+  const farbeAuswahl = statF.spieler === 'alle' ? FARBEN[0] : (spielerFarbe(statF.spieler) || FARBEN[0]);
+  const zehner = ZEHNER.map(([a, b]) => ({ a, b, ...summe(liste.filter(v => v.zahl >= a && v.zahl <= b)) }));
+  const erster = zehner.findIndex(x => x.n), letzter = zehner.length - 1 - [...zehner].reverse().findIndex(x => x.n);
+  const sichtbar = zehner.slice(erster, letzter + 1);
+  const saeulen = sichtbar.map(x => ({ kurz: `${x.a}–${x.b}`, lang: `${x.a}–${x.b}`, q: x.n ? x.quote : null, ok: x.ok, n: x.n }));
+  h += `<section class="karte"><h2>Quote je Zahlenbereich</h2>
+    ${diagrammPlatz(w => saeulenSvg(w, saeulen, farbeAuswahl))}
+    <details class="tabelle-auf"><summary>Als Tabelle</summary><div class="tabelle"><table>
+      <tr><th>Bereich</th><th class="z">Zahlen</th><th class="z">gecheckt</th><th class="z">Quote</th><th></th></tr>
+      ${sichtbar.map(x => `<tr class="${x.n ? '' : 'leer'}"><td class="feldname">${x.a}–${x.b}</td>
+        <td class="z">${x.n ? zahl(x.n) : '–'}</td><td class="z">${x.n ? zahl(x.ok) : '–'}</td>
+        <td class="z">${pct(x.quote)}</td><td class="b">${balken(x.quote)}</td></tr>`).join('')}
+    </table></div></details></section>`;
+
+  // Verlauf
+  const grp = new Map();
+  for (const v of liste) {
+    const [k, label, kurz] = gruppe(new Date(v.datum));
+    if (!grp.has(k)) grp.set(k, { label, kurz, liste: [] });
+    grp.get(k).liste.push(v);
+  }
+  const zeilen = [...grp.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  const perioden = zeilen.slice(0, MAX_PERIODEN).reverse().map(([, g]) => ({ lang: g.label, kurz: g.kurz, liste: g.liste }));
+  const punkt = l => { const x = summe(l); return x.n ? { q: x.quote, ok: x.ok, n: x.n } : null; };
+  let serien, ohneFarbe = 0;
+  const mitDaten = statF.spieler === 'alle' ? daten.spieler.filter(sp => liste.some(v => v.spieler === sp.id)) : [];
+  if (mitDaten.length > 1) {
+    serien = mitDaten.filter(sp => spielerFarbe(sp.id)).map(sp => ({
+      name: sp.name, farbe: spielerFarbe(sp.id), werte: perioden.map(p => punkt(p.liste.filter(v => v.spieler === sp.id)))
+    }));
+    ohneFarbe = mitDaten.length - serien.length;
+  } else {
+    const sp = statF.spieler !== 'alle' ? statF.spieler : (mitDaten[0] && mitDaten[0].id);
+    serien = [{ name: sp ? spielerName(sp) : 'Alle', farbe: (sp && spielerFarbe(sp)) || FARBEN[0], werte: perioden.map(p => punkt(p.liste)) }];
+  }
+  h += `<section class="karte"><div class="kopfzeile"><h2>Verlauf der Quote</h2>
+      ${segment('statGruppe', statF.gruppe, [['tag', 'Tag'], ['woche', 'Woche'], ['monat', 'Monat'], ['jahr', 'Jahr']])}</div>
+    ${serien.length > 1 ? legende(serien) : ''}
+    ${diagrammPlatz(w => linienSvg(w, perioden, serien))}
+    ${zeilen.length > MAX_PERIODEN ? `<p class="hinweis">Gezeigt: die letzten ${MAX_PERIODEN} Zeiträume. Für mehr „Woche“ oder „Monat“ wählen.</p>` : ''}
+    ${ohneFarbe ? `<p class="hinweis">${ohneFarbe} weitere Spieler ohne eigene Linie (höchstens 8) – oben einzeln auswählen.</p>` : ''}
+    <details class="tabelle-auf"><summary>Als Tabelle</summary><div class="tabelle"><table>
+      <tr><th>Zeitraum</th><th class="z">Zahlen</th><th class="z">gecheckt</th><th class="z">Quote</th><th></th></tr>
+      ${zeilen.map(([, g]) => { const x = summe(g.liste); return `<tr><td>${g.label}</td>
+        <td class="z">${zahl(x.n)}</td><td class="z">${zahl(x.ok)}</td><td class="z">${pct(x.quote)}</td>
+        <td class="b">${balken(x.quote)}</td></tr>`; }).join('')}
+    </table></div></details></section>`;
+
+  // Spielervergleich
+  if (statF.spieler === 'alle') {
+    const proSpieler = daten.spieler.map(sp => ({ name: sp.name, farbe: spielerFarbe(sp.id), ...summe(liste.filter(v => v.spieler === sp.id)) }))
+      .filter(x => x.n).sort((a, b) => b.quote - a.quote).map(x => ({ ...x, q: x.quote }));
+    if (proSpieler.length > 1) {
+      h += `<section class="karte"><h2>Spielervergleich</h2>
+        ${diagrammPlatz(w => balkenSvg(w, proSpieler))}</section>`;
+    }
+  }
+
+  // Einzelne Zahlen: am häufigsten verpasst / sicherste
+  const jeZahl = new Map();
+  for (const v of liste) {
+    const x = jeZahl.get(v.zahl) || { zahl: v.zahl, n: 0, ok: 0 };
+    x.n++; x.ok += v.ok;
+    jeZahl.set(v.zahl, x);
+  }
+  const oft = [...jeZahl.values()].filter(x => x.n >= 2).map(x => ({ ...x, quote: x.ok / x.n }));
+  if (oft.length >= 4) {
+    const tabelle = (titel, l) => `<div><h2 style="font-size:17px">${titel}</h2><div class="tabelle"><table>
+      <tr><th>Zahl</th><th class="z">gecheckt</th><th class="z">Quote</th></tr>
+      ${l.map(x => `<tr><td class="feldname">${x.zahl}</td><td class="z">${x.ok}/${x.n}</td><td class="z">${pct(x.quote)}</td></tr>`).join('')}
+    </table></div></div>`;
+    const k = Math.min(8, Math.floor(oft.length / 2));
+    const schwer = oft.slice().sort((a, b) => a.quote - b.quote || b.n - a.n).slice(0, k);
+    const leicht = oft.slice().sort((a, b) => b.quote - a.quote || b.n - a.n).slice(0, k);
+    h += `<section class="karte"><h2>Einzelne Zahlen <span class="grau">(mindestens 2× gestellt)</span></h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
+        ${tabelle('Am schwersten', schwer)}${tabelle('Am sichersten', leicht)}
+      </div></section>`;
+  }
+
+  // Einzelne Spiele
+  const spiele = spielIds.map(id => spielMap.get(id)).sort((a, b) => Date.parse(b.datum) - Date.parse(a.datum));
+  const zeige = statF.alle ? spiele : spiele.slice(0, 30);
+  h += `<section class="karte"><h2>Einzelne Spiele</h2><div class="tabelle"><table>
+    <tr><th>Datum</th>${statF.spieler === 'alle' ? '<th>Spieler</th>' : ''}<th>Bereich</th><th class="z">Darts</th><th class="z">gecheckt</th><th class="z">Quote</th><th>Zahlen</th><th></th></tr>
+    ${zeige.map(g => { const vl = liste.filter(v => v.spiel === g.id); const x = summe(vl); const d = new Date(g.datum); return `<tr>
+      <td style="white-space:nowrap">${fmtDatum(d)} <span class="grau">${fmtZeit(d)}</span></td>
+      ${statF.spieler === 'alle' ? `<td>${esc(spielerName(g.spieler))}</td>` : ''}
+      <td class="feldname">${bereichText(g.von, g.bis)}</td><td class="z">${g.darts}</td>
+      <td class="z">${x.ok}/${x.n}</td><td class="z">${pct(x.quote)}</td>
+      <td class="detail">${detailHtml(vl, 12)}</td>
+      <td class="z"><button class="btn klein gefahr" data-a="spielLoeschen" data-id="${g.id}" aria-label="Löschen">✕</button></td></tr>`; }).join('')}
+  </table></div>
+  ${spiele.length > 30 && !statF.alle ? `<div class="zeile abstand"><button class="btn klein" data-a="statAlle">Alle ${spiele.length} anzeigen</button></div>` : ''}
+  </section>`;
+  return h;
+}
+
+// ---------- Spieler ----------
+
+function spielerZeile(sp) {
+  const vl = daten.versuche.filter(v => v.spieler === sp.id);
+  const s = summe(vl);
+  const knoepfe = sp.versteckt
+    ? `<button class="btn klein" data-a="spielerZurueck" data-id="${sp.id}">Wieder in die Liste</button>
+       <button class="btn klein gefahr" data-a="spielerLoeschen" data-id="${sp.id}">Endgültig löschen</button>`
+    : `<button class="btn klein" data-a="umbenennen" data-id="${sp.id}">Umbenennen</button>
+       <button class="btn klein gefahr" data-a="spielerLoeschen" data-id="${sp.id}">Löschen</button>`;
+  return `<div class="spieler-zeile"><div><b>${esc(sp.name)}</b>
+    <div class="grau">${vl.length ? `${zahl(new Set(vl.map(v => v.spiel)).size)} Spiele · ${zahl(s.n)} Zahlen · Quote ${pct(s.quote)}` : 'noch keine Spiele'}</div></div>
+    <div class="zeile">${knoepfe}</div></div>`;
+}
+
+function renderSpieler() {
+  const aktiv = aktiveSpieler();
+  const entfernt = daten.spieler.filter(s => s.versteckt).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  let h = `<section class="karte"><h2>Spieler anlegen</h2>
+    <div class="zeile"><input id="neuName" type="text" placeholder="Name" maxlength="30" autocomplete="off">
+    <button class="btn primaer" data-a="spielerNeu">Hinzufügen</button></div></section>`;
+  h += `<section class="karte"><h2>Spieler <span class="grau">(${aktiv.length})</span></h2>`;
+  h += aktiv.length ? aktiv.map(spielerZeile).join('') : `<p class="grau" style="margin:0">Noch keine Spieler.</p>`;
+  h += `</section>`;
+  if (entfernt.length) {
+    h += `<section class="karte"><h2>Aus der Liste entfernt <span class="grau">(Daten bleiben in der Statistik)</span></h2>
+      ${entfernt.map(spielerZeile).join('')}</section>`;
+  }
+  return h;
+}
+
+// Tippfehler-Abstand zweier Namen (Levenshtein)
+function abstand(a, b) {
+  const z = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let links = i, diag = i - 1;
+    for (let j = 1; j <= b.length; j++) {
+      const oben = z[j];
+      z[j] = Math.min(oben + 1, links + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = oben;
+      links = z[j];
+    }
+  }
+  return z[b.length];
+}
+const nameKey = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+function spielerWaehlen(sp, text) {
+  if (sp.versteckt) { delete sp.versteckt; datenGeaendert(); }
+  einst.spieler = sp.id;
+  einstSpeichern();
+  neuerSpielerOffen = false;
+  render();
+  meldung(text);
+}
+
+async function spielerNeu() {
+  const inp = document.getElementById('neuName');
+  const name = (inp ? inp.value : '').trim().replace(/\s+/g, ' ');
+  if (!name) { meldung('Bitte einen Namen eingeben.'); if (inp) inp.focus(); return; }
+  const key = nameKey(name);
+
+  const gleich = daten.spieler.find(s => nameKey(s.name) === key);
+  if (gleich) {
+    spielerWaehlen(gleich, gleich.versteckt ? `${gleich.name} ist wieder in der Liste.` : `${gleich.name} gibt es schon – ausgewählt.`);
+    return;
+  }
+  const grenze = key.length <= 4 ? 1 : 2;
+  const aehnlich = daten.spieler.find(s => abstand(nameKey(s.name), key) <= grenze);
+  if (aehnlich) {
+    const wahl = await dialog(`Es gibt schon den Spieler „${aehnlich.name}“.\nIst das ein Tippfehler?`,
+      [{ text: 'Abbrechen', wert: null }, { text: `„${name}“ neu anlegen`, wert: 'neu' }, { text: `„${aehnlich.name}“ nehmen`, wert: 'alt', art: 'primaer' }]);
+    if (!wahl) return;
+    if (wahl === 'alt') { spielerWaehlen(aehnlich, `${aehnlich.name} ausgewählt.`); return; }
+  }
+
+  const sp = { id: neueId(), name, angelegt: new Date().toISOString() };
+  daten.spieler.push(sp);
+  farbenZuweisen();
+  datenGeaendert();
+  spielerWaehlen(sp, `${name} angelegt.`);
+  const neu = document.getElementById('neuName');
+  if (neu && ansicht === 'spieler') neu.focus();
+}
+
+async function umbenennen(id) {
+  const sp = daten.spieler.find(s => s.id === id);
+  if (!sp) return;
+  const name = await dialog('Neuer Name:', [{ text: 'Abbrechen', wert: null }, { text: 'Speichern', wert: true, art: 'primaer' }], sp.name);
+  if (name == null) return;
+  const n = name.trim().replace(/\s+/g, ' ');
+  if (!n || n === sp.name) return;
+  if (daten.spieler.some(s => s.id !== id && nameKey(s.name) === nameKey(n))) { meldung(`„${n}“ gibt es schon.`); return; }
+  sp.name = n;
+  datenGeaendert();
+  render();
+}
+
+async function spielerLoeschen(id) {
+  const sp = daten.spieler.find(s => s.id === id);
+  if (!sp) return;
+  const laeuft = lauf && lauf.spieler === id && !lauf.fertig;
+  const n = daten.spiele.filter(g => g.spieler === id).length;
+
+  let wahl;
+  if (!n) {
+    wahl = await dialog(`Spieler „${sp.name}“ löschen?\n\nEs gibt noch keine Spieldaten.`,
+      [{ text: 'Abbrechen', wert: null }, { text: 'Löschen', wert: 'alles', art: 'gefahr' }]);
+  } else if (sp.versteckt) {
+    wahl = await dialog(`„${sp.name}“ endgültig löschen?\n\nDabei werden auch alle ${n} Spiele gelöscht. Das lässt sich nicht rückgängig machen.`,
+      [{ text: 'Abbrechen', wert: null }, { text: 'Alles löschen', wert: 'alles', art: 'gefahr' }]);
+  } else {
+    wahl = await dialog(`Spieler „${sp.name}“ löschen.\n\nSollen auch alle Spieldaten (${n} Spiele) gelöscht werden?\n\n` +
+      '„Nur aus der Liste“: Der Name verschwindet aus der Auswahl, die Ergebnisse bleiben in der Statistik.',
+      [{ text: 'Abbrechen', wert: null }, { text: 'Spieler und alle Daten löschen', wert: 'alles', art: 'gefahr' }, { text: 'Nur aus der Liste', wert: 'liste', art: 'primaer' }]);
+    if (wahl === 'alles') {
+      wahl = await dialog(`Wirklich alle ${n} Spiele von „${sp.name}“ endgültig löschen?`,
+        [{ text: 'Abbrechen', wert: null }, { text: 'Endgültig löschen', wert: 'alles', art: 'gefahr' }]);
+    }
+  }
+  if (!wahl) return;
+  if (wahl === 'alles' && laeuft) { meldung(`${sp.name} hat gerade ein laufendes Spiel.`); return; }
+
+  if (wahl === 'liste') {
+    sp.versteckt = true;
+    meldung(`${sp.name} aus der Liste entfernt. Die Daten bleiben erhalten.`);
+  } else {
+    daten.spieler = daten.spieler.filter(s => s.id !== id);
+    daten.spiele = daten.spiele.filter(g => g.spieler !== id);
+    daten.versuche = daten.versuche.filter(v => v.spieler !== id);
+    if (lauf && lauf.spieler === id) { lauf = null; laufSpeichern(); }
+    meldung(`${sp.name} und alle Daten gelöscht.`);
+  }
+  if (einst.spieler === id) { einst.spieler = null; einstSpeichern(); }
+  datenGeaendert();
+  render();
+}
+
+function spielerZurueck(id) {
+  const sp = daten.spieler.find(s => s.id === id);
+  if (!sp) return;
+  delete sp.versteckt;
+  datenGeaendert();
+  render();
+  meldung(`${sp.name} ist wieder in der Liste.`);
+}
+
+// ---------- Spiel ----------
+
+// Zufallszahl aus dem Bereich, möglichst nicht dieselbe wie eben
+function zufallsZahl(L, vorher) {
+  const pool = zahlenPool(L.von, L.bis, L.darts);
+  const auswahl = pool.length > 1 ? pool.filter(n => n !== vorher) : pool;
+  return auswahl[Math.floor(Math.random() * auswahl.length)];
+}
+
+function starten(o) {
+  o = o || { spieler: einst.spieler, von: einst.von, bis: einst.bis, darts: einst.darts, anzahl: einst.anzahl };
+  if (!o.spieler || !zahlenPool(o.von, o.bis, o.darts).length) return;
+  lauf = {
+    spiel: neueId(), spieler: o.spieler, von: o.von, bis: o.bis, darts: o.darts, anzahl: o.anzahl || 0,
+    beginn: new Date().toISOString(), versuche: [], aktuell: 0, fertig: false, abgebrochen: false
+  };
+  lauf.aktuell = zufallsZahl(lauf);
+  laufSpeichern();
+  wachHalten(true);
+  render();
+  window.scrollTo(0, 0);
+}
+
+function vibrieren() {
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* egal */ }
+}
+
+function ergebnis(ok) {
+  const L = lauf;
+  if (!L || L.fertig) return;
+  // Das Spiel wird erst mit der ersten Eingabe gespeichert, damit keine leeren Spiele entstehen.
+  if (!spielVon(L.spiel)) {
+    daten.spiele.push({ id: L.spiel, spieler: L.spieler, von: L.von, bis: L.bis, darts: L.darts, anzahl: L.anzahl, datum: L.beginn });
+  }
+  const v = { id: neueId(), spiel: L.spiel, spieler: L.spieler, zahl: L.aktuell, ok: ok ? 1 : 0, datum: new Date().toISOString() };
+  daten.versuche.push(v);
+  L.versuche.push(v.id);
+  datenGeaendert();
+  vibrieren();
+  if (L.anzahl && L.versuche.length >= L.anzahl) { L.fertig = true; wachHalten(false); }
+  else L.aktuell = zufallsZahl(L, v.zahl);
+  laufSpeichern();
+  render();
+}
+
+function rueckgaengig() {
+  const L = lauf;
+  if (!L || L.abgebrochen || !L.versuche.length) return;
+  const id = L.versuche.pop();
+  const i = daten.versuche.findIndex(v => v.id === id);
+  const v = i >= 0 ? daten.versuche.splice(i, 1)[0] : null;
+  if (v) L.aktuell = v.zahl;
+  if (!daten.versuche.some(x => x.spiel === L.spiel)) daten.spiele = daten.spiele.filter(g => g.id !== L.spiel);
+  datenGeaendert();
+  if (L.fertig) { L.fertig = false; wachHalten(true); }
+  laufSpeichern();
+  render();
+}
+
+async function spielBeenden() {
+  const L = lauf;
+  if (!L) return;
+  const n = L.versuche.length;
+  if (n) {
+    const wahl = await dialog(`Spiel jetzt beenden?\n\nDie ${n} gespielten Zahlen bleiben gespeichert.`,
+      [{ text: 'Weiterspielen', wert: null }, { text: 'Beenden', wert: true, art: 'gefahr' }]);
+    if (!wahl) return;
+    L.fertig = true;
+    L.abgebrochen = true;
+  } else {
+    lauf = null;
+  }
+  wachHalten(false);
+  laufSpeichern();
+  render();
+}
+
+// ---------- Daten / txt-Datei ----------
+
+function datenAlsText() {
+  const jetzt = new Date();
+  const liste = (arr, f) => (arr.length ? '[\n    ' + arr.map(f).join(',\n    ') + '\n  ]' : '[]');
+  const json = '{\n' +
+    `  "app": ${JSON.stringify(APP)},\n` +
+    `  "version": ${VERSION},\n` +
+    `  "gespeichert": ${JSON.stringify(jetzt.toISOString())},\n` +
+    '  "spieler": ' + liste(daten.spieler, s => {
+      const o = { id: s.id, name: s.name, angelegt: s.angelegt, farbe: s.farbe };
+      if (s.versteckt) o.versteckt = true;
+      return JSON.stringify(o);
+    }) + ',\n' +
+    '  "spiele": ' + liste(daten.spiele, g =>
+      JSON.stringify({ id: g.id, spieler: g.spieler, datum: g.datum, von: g.von, bis: g.bis, darts: g.darts, anzahl: g.anzahl })) + ',\n' +
+    '  "versuche": ' + liste(daten.versuche, v =>
+      JSON.stringify({ id: v.id, spiel: v.spiel, datum: v.datum, zahl: v.zahl, ok: v.ok })) + '\n' +
+    '}\n';
+  return [
+    'Zufall – Checkout-Training',
+    `Datenformat: ${VERSION}`,
+    `Gespeichert: ${fmtDatum(jetzt)} ${fmtZeit(jetzt)}`,
+    `Spieler: ${daten.spieler.map(s => s.name).join(', ') || '–'}`,
+    `Spiele: ${daten.spiele.length}, Zahlen: ${daten.versuche.length}`,
+    '',
+    'Diese Datei in Zufall unter „Daten“ → „Aus txt-Datei laden“ wieder einlesen.',
+    'Bitte nicht von Hand ändern. Ein Spiel hat einen festen Bereich ("von"–"bis") und eine feste Anzahl "darts";',
+    '"versuche" = jede gestellte Zahl mit "ok" (1 = gecheckt, 0 = nicht gecheckt).',
+    '',
+    '----- DATEN -----',
+    json
+  ].join('\n');
+}
+
+function parseDatei(text) {
+  text = text.replace(/^﻿/, '');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('Keine Zufall-Daten gefunden.');
+  let o;
+  try { o = JSON.parse(text.slice(a, b + 1)); } catch (e) { throw new Error('Der Inhalt ist beschädigt.'); }
+  if (o.app !== APP) throw new Error(o.app ? `Die Datei stammt von „${o.app}“, nicht von Zufall.` : 'Die Datei stammt nicht von Zufall.');
+  if (Number(o.version) > VERSION) throw new Error(`Die Datei stammt von einer neueren Fassung von Zufall (Datenformat ${o.version}).`);
+  return normalisieren(o);
+}
+
+function gesichert(name) {
+  meta.ungesichert = false;
+  meta.letzteDatei = new Date().toISOString();
+  meta.dateiName = name;
+  lsSchreiben(LS.meta, meta);
+}
+
+const dateiInhalt = () => '﻿' + datenAlsText();
+
+// --- Speicherordner (Chrome/Edge): Ordner wird einmal gewählt und im Browser gemerkt (IndexedDB) ---
+
+function idb(modus, fn) {
+  return new Promise((ok, fehler) => {
+    const r = indexedDB.open('zufall', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('handles');
+    r.onerror = () => fehler(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      const tx = db.transaction('handles', modus);
+      const q = fn(tx.objectStore('handles'));
+      tx.oncomplete = () => { db.close(); ok(q.result); };
+      tx.onerror = () => { db.close(); fehler(tx.error); };
+    };
+  });
+}
+
+async function ordnerInit() {
+  if (!fsOrdner) return;
+  try {
+    ordner = (await idb('readonly', st => st.get('ordner'))) || null;
+    if (ordner) ordnerRecht = await ordner.queryPermission({ mode: 'readwrite' });
+  } catch (e) { ordner = null; }
+  render();
+}
+
+async function rechtHolen() {
+  ordnerRecht = await ordner.queryPermission({ mode: 'readwrite' });
+  if (ordnerRecht !== 'granted') ordnerRecht = await ordner.requestPermission({ mode: 'readwrite' });
+  return ordnerRecht === 'granted';
+}
+
+async function ordnerWaehlen() {
+  let h;
+  try {
+    h = await window.showDirectoryPicker({ id: 'zufall', mode: 'readwrite', startIn: ordner || 'documents' });
+  } catch (e) {
+    if (e.name !== 'AbortError') meldung('Ordner konnte nicht gewählt werden: ' + e.message);
+    return;
+  }
+  ordner = h;
+  ordnerRecht = 'granted';
+  try { await idb('readwrite', st => st.put(h, 'ordner')); } catch (e) { /* dann nur bis zum Schließen gemerkt */ }
+
+  // Liegt dort schon eine Datei (z. B. von einem anderen Gerät), zuerst übernehmen statt überschreiben.
+  let vorhanden = '';
+  try { vorhanden = await (await (await h.getFileHandle(DATEINAME)).getFile()).text(); } catch (e) { /* keine Datei */ }
+  if (vorhanden.trim()) {
+    const ok = await textEinlesen(vorhanden, `${h.name}/${DATEINAME}`);
+    if (!ok) { meldung(`Ordner „${h.name}“ gewählt. Die vorhandene Datei wurde nicht verändert.`); render(); return; }
+  }
+  await inOrdnerSchreiben(false);
+  render();
+}
+
+async function ordnerVergessen() {
+  const ok = await dialog(`Ordner „${ordner.name}“ nicht mehr verwenden?\n\nDie Dateien im Ordner bleiben erhalten.`,
+    [{ text: 'Abbrechen', wert: null }, { text: 'Nicht mehr verwenden', wert: true, art: 'gefahr' }]);
+  if (!ok) return;
+  ordner = null;
+  try { await idb('readwrite', st => st.delete('ordner')); } catch (e) { /* egal */ }
+  render();
+}
+
+// Vor dem ersten Überschreiben eines Tages wird der alte Stand nach „Sicherungen“ kopiert.
+async function tagesSicherung(fh) {
+  const alt = await (await fh.getFile()).text();
+  if (!alt.trim()) return;
+  const d = new Date();
+  const name = `zufall-daten_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.txt`;
+  const sd = await ordner.getDirectoryHandle('Sicherungen', { create: true });
+  try { await sd.getFileHandle(name); return; } catch (e) { /* heute noch keine Sicherung */ }
+  const w = await (await sd.getFileHandle(name, { create: true })).createWritable();
+  await w.write(alt);
+  await w.close();
+}
+
+async function inOrdnerSchreiben(still) {
+  if (!ordner) return false;
+  try {
+    if (still) {
+      ordnerRecht = await ordner.queryPermission({ mode: 'readwrite' });
+      if (ordnerRecht !== 'granted') { if (ansicht !== 'spiel' || !lauf) render(); return false; }
+    } else if (!(await rechtHolen())) {
+      meldung('Der Zugriff auf den Ordner wurde nicht erlaubt.');
+      render();
+      return false;
+    }
+    const fh = await ordner.getFileHandle(DATEINAME, { create: true });
+    await tagesSicherung(fh);
+    const w = await fh.createWritable();
+    await w.write(dateiInhalt());
+    await w.close();
+    gesichert(`${ordner.name}/${DATEINAME}`);
+    if (!still) meldung(`Gespeichert im Ordner „${ordner.name}“.`);
+    if (ansicht === 'daten' || !still) render();
+    else renderNav();
+    return true;
+  } catch (e) {
+    meldung(`${still ? 'Automatisches ' : ''}Speichern im Ordner fehlgeschlagen: ${e.message}`);
+    return false;
+  }
+}
+
+async function zugriffErlauben() {
+  if (!ordner) return;
+  if (await rechtHolen()) {
+    if (meta.ungesichert) await inOrdnerSchreiben(true);
+    meldung(`Automatisches Speichern in „${ordner.name}“ ist aktiv.`);
+  }
+  render();
+}
+
+function renderOrdnerBanner() {
+  if (!ordner || !meta.autoOrdner || ordnerRecht === 'granted') return '';
+  return `<div class="banner"><span>Automatisches Speichern in „${esc(ordner.name)}“ ist pausiert.</span>
+    <button class="btn klein" data-a="zugriff">Zugriff erlauben</button></div>`;
+}
+
+// --- Ohne Ordner-Zugriff: Download oder (Handy/Tablet) „In Dateien sichern“ ---
+
+function herunterladen() {
+  const blob = new Blob([dateiInhalt()], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = DATEINAME;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  gesichert(DATEINAME);
+  meldung(`„${DATEINAME}“ wurde heruntergeladen.`);
+  render();
+}
+
+async function teilen() {
+  // navigator.share direkt im Klick aufrufen, sonst verweigert der Browser
+  try {
+    await navigator.share({ files: [new File([dateiInhalt()], DATEINAME, { type: 'text/plain' })], title: 'Zufall – Daten' });
+    gesichert(DATEINAME);
+    render();
+  } catch (e) {
+    if (e.name !== 'AbortError') meldung('Sichern fehlgeschlagen: ' + e.message);
+  }
+}
+
+async function dateiLaden() {
+  if (typeof window.showOpenFilePicker === 'function') {
+    try {
+      const [h] = await window.showOpenFilePicker({
+        multiple: false, startIn: ordner || 'documents',
+        types: [{ description: 'Textdatei', accept: { 'text/plain': ['.txt'] } }]
+      });
+      const f = await h.getFile();
+      await textEinlesen(await f.text(), f.name);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  const inp = document.getElementById('dateiInput');
+  inp.value = '';
+  inp.click();
+}
+
+document.getElementById('dateiInput').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => textEinlesen(String(r.result), f.name);
+  r.onerror = () => meldung('Die Datei konnte nicht gelesen werden.');
+  r.readAsText(f, 'utf-8');
+});
+
+async function textEinlesen(text, name) {
+  let neu;
+  try { neu = parseDatei(text); }
+  catch (e) { await dialog(`Die Datei „${name}“ konnte nicht geladen werden.\n\n${e.message}`, [{ text: 'OK', wert: true }]); return false; }
+
+  const wahl = await dialog(
+    `Datei „${name}“:\n${neu.spieler.length} Spieler, ${neu.spiele.length} Spiele\n\n` +
+    `Hier im Browser:\n${daten.spieler.length} Spieler, ${daten.spiele.length} Spiele\n\n` +
+    'Zusammenführen: Beides wird vereint (z. B. wenn auf mehreren Geräten gespielt wurde).\n' +
+    'Ersetzen: Der Stand hier wird durch die Datei ersetzt.',
+    [{ text: 'Abbrechen', wert: null }, { text: 'Ersetzen', wert: 'ersetzen', art: 'gefahr' }, { text: 'Zusammenführen', wert: 'merge', art: 'primaer' }]);
+  if (!wahl) return false;
+
+  if (wahl === 'ersetzen') {
+    daten = neu;
+    if (lauf && !daten.spieler.find(s => s.id === lauf.spieler)) lauf = null;
+    if (lauf) lauf.versuche = lauf.versuche.filter(id => daten.versuche.some(v => v.id === id));
+    lsSchreiben(LS.daten, daten);
+    laufSpeichern();
+    gesichert(name);
+    meldung('Daten aus der Datei übernommen.');
+  } else {
+    const dateiIds = new Set(neu.versuche.map(v => v.id));
+    const nurHier = daten.versuche.some(v => !dateiIds.has(v.id));
+    const idMap = {};
+    for (const s of neu.spieler) {
+      const da = daten.spieler.find(x => x.id === s.id) || daten.spieler.find(x => nameKey(x.name) === nameKey(s.name));
+      if (da) idMap[s.id] = da.id;
+      else { daten.spieler.push({ ...s }); idMap[s.id] = s.id; }
+    }
+    const spieleDa = new Set(daten.spiele.map(g => g.id));
+    let dazu = 0;
+    for (const g of neu.spiele) {
+      if (spieleDa.has(g.id)) continue;
+      daten.spiele.push({ ...g, spieler: idMap[g.spieler] || g.spieler });
+      dazu++;
+    }
+    const versucheDa = new Set(daten.versuche.map(v => v.id));
+    for (const v of neu.versuche) {
+      if (!versucheDa.has(v.id)) daten.versuche.push({ ...v, spieler: idMap[v.spieler] || v.spieler });
+    }
+    daten.spiele.sort((a, b) => Date.parse(a.datum) - Date.parse(b.datum));
+    daten.versuche.sort((a, b) => Date.parse(a.datum) - Date.parse(b.datum));
+    lsSchreiben(LS.daten, daten);
+    if (nurHier) { meta.ungesichert = true; lsSchreiben(LS.meta, meta); } else gesichert(name);
+    meldung(`${dazu} Spiele hinzugefügt.`);
+  }
+  farbenZuweisen();
+  lsSchreiben(LS.daten, daten);
+  if (ordner && meta.autoOrdner && ordnerRecht === 'granted' && meta.ungesichert) {
+    schreibKette = schreibKette.then(() => inOrdnerSchreiben(true));
+  }
+  render();
+  return true;
+}
+
+function renderDaten() {
+  const s = summe(daten.versuche);
+  let status;
+  if (!daten.versuche.length) status = '<p class="grau">Noch keine Spiele vorhanden.</p>';
+  else if (meta.ungesichert) status = '<p class="warnung">⚠ Es gibt Spiele, die noch nicht in einer txt-Datei gesichert sind.</p>';
+  else {
+    const d = meta.letzteDatei ? new Date(meta.letzteDatei) : null;
+    status = `<p class="ok">✓ Alles in einer txt-Datei gesichert${d ? ` (${fmtDatum(d)} ${fmtZeit(d)}${meta.dateiName ? `, „${esc(meta.dateiName)}“` : ''})` : ''}.</p>`;
+  }
+
+  let datei;
+  if (fsOrdner) {
+    datei = ordner
+      ? `<p style="margin-top:0">Speicherordner: <b>„${esc(ordner.name)}“</b> – Datei „${DATEINAME}“</p>
+        ${renderOrdnerBanner()}
+        <div class="zeile">
+          <button class="btn primaer" data-a="ordnerSpeichern">Jetzt speichern</button>
+          <button class="btn" data-a="dateiLaden">Aus txt-Datei laden</button>
+          <button class="btn" data-a="ordnerWaehlen">Anderen Ordner …</button>
+          <button class="btn klein gefahr" data-a="ordnerVergessen">Ordner nicht mehr verwenden</button>
+        </div>
+        <div class="zeile abstand"><label><input type="checkbox" data-c="autoOrdner" ${meta.autoOrdner ? 'checked' : ''}> Nach jeder Zahl automatisch speichern</label></div>
+        <p class="hinweis">Vor dem ersten Speichern eines Tages wird der alte Stand im Unterordner „Sicherungen“ aufgehoben.
+          Nach einem Neustart des Browsers fragt Chrome/Edge eventuell einmal nach, ob der Zugriff wieder erlaubt ist
+          („Bei jedem Besuch erlauben“ wählen, dann nicht mehr).</p>`
+      : `<p style="margin-top:0">Wählen Sie einmal den Ordner, in dem die Daten liegen sollen – z. B. <b>„${ORDNER_VORSCHLAG}“</b>
+          (im Auswahlfenster mit „Neuer Ordner“ anlegen). Danach wird automatisch dorthin gespeichert, nicht mehr in „Downloads“.</p>
+        <div class="zeile">
+          <button class="btn primaer" data-a="ordnerWaehlen">Speicherordner wählen …</button>
+          <button class="btn" data-a="dateiLaden">Aus txt-Datei laden</button>
+        </div>
+        <p class="hinweis">Liegt im gewählten Ordner schon eine Datei „${DATEINAME}“, wird sie zuerst übernommen.</p>`;
+  } else if (kannTeilen) {
+    datei = `<div class="zeile">
+        <button class="btn primaer" data-a="teilen">In Dateien sichern …</button>
+        <button class="btn" data-a="dateiLaden">Aus txt-Datei laden</button>
+        <button class="btn klein" data-a="herunterladen">Herunterladen</button>
+      </div>
+      <p class="hinweis">„In Dateien sichern“ antippen und den Ordner <b>„${ORDNER_VORSCHLAG}“</b> auswählen
+        (beim ersten Mal dort mit „Neuer Ordner“ anlegen). Wenn gefragt wird: vorhandene Datei <b>ersetzen</b>.
+        Auf Android z. B. „Drive“ oder „In Dateien speichern“ wählen.</p>`;
+  } else {
+    datei = `<div class="zeile">
+        <button class="btn primaer" data-a="herunterladen">In txt-Datei speichern</button>
+        <button class="btn" data-a="dateiLaden">Aus txt-Datei laden</button>
+      </div>
+      <p class="hinweis">Dieser Browser speichert in seinen Download-Ordner. Damit die Datei im Ordner „${ORDNER_VORSCHLAG}“ landet:
+        <b>Firefox:</b> Einstellungen → Allgemein → Downloads → „Jedes Mal nachfragen, wo eine Datei gespeichert werden soll“.
+        <b>Safari (Mac):</b> Einstellungen → Allgemein → „Speicherort für geladene Dateien“ → „Andere …“ (gilt für alle Downloads).
+        Am einfachsten: das Spiel in <b>Chrome oder Edge</b> öffnen – dort wird direkt in den Ordner gespeichert.</p>`;
+  }
+
+  return `<section class="karte"><h2>Speicherung</h2>
+      ${speicherOk
+        ? '<p class="ok" style="margin-top:0">✓ Alle Spiele werden automatisch in diesem Browser gespeichert.</p>'
+        : '<p class="warnung" style="margin-top:0">⚠ Dieser Browser erlaubt kein automatisches Speichern (z. B. privates Fenster). Bitte nach dem Spiel unbedingt in eine txt-Datei speichern.</p>'}
+      ${status}
+      <p class="hinweis">Der Browser-Speicher gilt nur für diesen Browser auf diesem Gerät. Die txt-Datei dient zur Sicherung und zum Übertragen auf andere Geräte.</p>
+    </section>
+    <section class="karte"><h2>txt-Datei</h2>
+      ${datei}
+      <p class="hinweis">Beim Laden kann man wählen, ob die Datei den Stand hier ersetzt oder mit ihm zusammengeführt wird.</p>
+    </section>
+    <section class="karte"><h2>Übersicht</h2>
+      <p style="margin:0">${daten.spieler.length} Spieler · ${zahl(daten.spiele.length)} Spiele · ${zahl(s.n)} Zahlen · ${zahl(s.ok)} gecheckt</p>
+    </section>`;
+}
+
+// ---------- Bedienung ----------
+
+const GRENZEN = { von: [MIN_ZAHL, MAX_ZAHL], bis: [MIN_ZAHL, MAX_ZAHL], darts: [1, MAX_DARTS], anzahl: [1, 999] };
+
+function setze(k, n) {
+  const [min, max] = GRENZEN[k];
+  if (!Number.isFinite(n)) n = einst[k];
+  n = Math.round(n);
+  einst[k] = k === 'anzahl' && n <= 0 ? 0 : Math.max(min, Math.min(max, n));
+  // „von“ darf nicht über „bis“ liegen (und umgekehrt): die andere Grenze wird mitgezogen
+  if (k === 'von' && einst.von > einst.bis) einst.bis = einst.von;
+  if (k === 'bis' && einst.bis < einst.von) einst.von = einst.bis;
+  einstSpeichern();
+  render();
+}
+
+const aktionen = {
+  tab: el => { ansicht = el.dataset.v; render(); window.scrollTo(0, 0); },
+  neuAbbrechen: () => { neuerSpielerOffen = false; render(); },
+  setze: el => setze(el.dataset.k, Number(el.dataset.w)),
+  schritt: el => setze(el.dataset.k, (einst[el.dataset.k] || 0) + Number(el.dataset.d)),
+  bereich: el => { einst.von = Number(el.dataset.von); einst.bis = Number(el.dataset.bis); einstSpeichern(); render(); },
+  start: () => starten(),
+  ergebnis: el => ergebnis(Number(el.dataset.n)),
+  rueck: () => rueckgaengig(),
+  beenden: () => spielBeenden(),
+  nochmal: () => starten({ spieler: lauf.spieler, von: lauf.von, bis: lauf.bis, darts: lauf.darts, anzahl: lauf.anzahl }),
+  neu: () => { lauf = null; laufSpeichern(); render(); window.scrollTo(0, 0); },
+  spielerNeu: () => spielerNeu(),
+  umbenennen: el => umbenennen(el.dataset.id),
+  spielerLoeschen: el => spielerLoeschen(el.dataset.id),
+  spielerZurueck: el => spielerZurueck(el.dataset.id),
+  statZeit: el => { statF.zeitraum = el.dataset.w; statF.alle = false; statSpeichern(); render(); },
+  statGruppe: el => { statF.gruppe = el.dataset.w; statSpeichern(); render(); },
+  statAlle: () => { statF.alle = true; render(); },
+  spielLoeschen: async el => {
+    const g = spielVon(el.dataset.id);
+    if (!g) return;
+    if (lauf && lauf.spiel === g.id && !lauf.fertig) { meldung('Dieses Spiel läuft gerade.'); return; }
+    const s = summe(daten.versuche.filter(v => v.spiel === g.id));
+    const ok = await dialog(`Dieses Spiel löschen?\n\n${fmtDatum(new Date(g.datum))} · ${spielerName(g.spieler)} · ${bereichText(g.von, g.bis)} · ${dartsText(g.darts)} · ${s.ok}/${s.n} gecheckt`,
+      [{ text: 'Abbrechen', wert: null }, { text: 'Löschen', wert: true, art: 'gefahr' }]);
+    if (!ok) return;
+    daten.spiele = daten.spiele.filter(x => x.id !== g.id);
+    daten.versuche = daten.versuche.filter(v => v.spiel !== g.id);
+    if (lauf && lauf.spiel === g.id) { lauf = null; laufSpeichern(); }
+    datenGeaendert();
+    render();
+  },
+  ordnerWaehlen: () => ordnerWaehlen(),
+  ordnerSpeichern: () => inOrdnerSchreiben(false),
+  ordnerVergessen: () => ordnerVergessen(),
+  zugriff: () => zugriffErlauben(),
+  teilen: () => teilen(),
+  herunterladen: () => herunterladen(),
+  dateiLaden: () => dateiLaden()
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.disabled || document.querySelector('.overlay')) return;
+  const f = aktionen[el.dataset.a];
+  if (f) f(el);
+});
+
+document.addEventListener('change', e => {
+  const c = e.target.dataset.c;
+  if (!c) return;
+  if (GRENZEN[c]) setze(c, parseInt(e.target.value, 10));
+  else if (c === 'spielerWahl') {
+    if (e.target.value === '__neu') {
+      neuerSpielerOffen = true;
+      render();
+      const inp = document.getElementById('neuName');
+      if (inp) inp.focus();
+    } else {
+      einst.spieler = e.target.value;
+      neuerSpielerOffen = false;
+      einstSpeichern();
+      render();
+    }
+  }
+  else if (c === 'statSpieler') { statF.spieler = e.target.value; statF.alle = false; statSpeichern(); render(); }
+  else if (c === 'statDarts') { statF.darts = e.target.value; statF.alle = false; statSpeichern(); render(); }
+  else if (c === 'statVon') { statF.von = e.target.value; statSpeichern(); render(); }
+  else if (c === 'statBis') { statF.bis = e.target.value; statSpeichern(); render(); }
+  else if (c === 'autoOrdner') {
+    meta.autoOrdner = e.target.checked;
+    lsSchreiben(LS.meta, meta);
+    if (meta.autoOrdner && meta.ungesichert) inOrdnerSchreiben(false);
+    else render();
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (document.querySelector('.overlay')) return;
+  const ziel = e.target;
+  if (ziel.matches && ziel.matches('input, select, textarea')) {
+    if (e.key === 'Enter' && ziel.id === 'neuName') { e.preventDefault(); spielerNeu(); }
+    return;
+  }
+  if ((e.key === 'Enter' || e.key === ' ') && ziel.closest && ziel.closest('button')) return; // Knopf löst selbst aus
+  if (ansicht !== 'spiel' || !lauf || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Backspace') { e.preventDefault(); rueckgaengig(); return; }
+  if (lauf.fertig) return;
+  if (e.key === '1' || e.key === '+') { e.preventDefault(); ergebnis(1); }
+  else if (e.key === '0' || e.key === '-') { e.preventDefault(); ergebnis(0); }
+});
+
+farbenZuweisen();
+lsSchreiben(LS.daten, daten);
+if (lauf && !lauf.fertig) wachHalten(true);
+render();
+ordnerInit();
+</script>
+</body>
+</html>

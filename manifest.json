@@ -1,0 +1,15 @@
+{
+  "name": "Zufall – Checkout-Training",
+  "short_name": "Zufall",
+  "description": "Checkout-Training für Darter: Zufallszahl im gewählten Bereich mit fester Anzahl Darts auf Null.",
+  "lang": "de",
+  "start_url": "zufall.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1412",
+  "theme_color": "#0f1412",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
